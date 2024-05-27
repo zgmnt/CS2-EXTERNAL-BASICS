@@ -1,9 +1,4 @@
-#include "interfaces.h"
-#include "hooker.h"
-#include "modsupport.h"
-#include "Utils/netvarmanager.h"
-#include "EventListener.h"
-
+// 25.05
 EventListener* eventListener = nullptr;
 
 /* called when the library is loading */
@@ -13,11 +8,9 @@ int __attribute__((constructor)) AimTuxInit()
 	Interfaces::DumpInterfaces();
 
 	Hooker::FindViewRender();
-	Hooker::FindSDLInput();
 	Hooker::InitializeVMHooks();
 	Hooker::FindIClientMode();
 	Hooker::FindGlobalVars();
-	Hooker::FindCInput();
 	Hooker::FindGlowManager();
 	Hooker::FindPlayerResource();
 	Hooker::FindGameRules();
@@ -102,7 +95,7 @@ int __attribute__((constructor)) AimTuxInit()
 	return 0;
 }
 
-void __attribute__((destructor)) AimTuxShutdown()
+void __attribute__((destructor)) Shutdown()
 {
 	cvar->FindVar("cl_mouseenable")->SetValue(1);
 
@@ -113,13 +106,11 @@ void __attribute__((destructor)) AimTuxShutdown()
 
 	clientVMT->ReleaseVMT();
 	panelVMT->ReleaseVMT();
-	modelRenderVMT->ReleaseVMT();
 	clientModeVMT->ReleaseVMT();
 	gameEventsVMT->ReleaseVMT();
 	viewRenderVMT->ReleaseVMT();
 	inputInternalVMT->ReleaseVMT();
 	materialVMT->ReleaseVMT();
-	surfaceVMT->ReleaseVMT();
 	launcherMgrVMT->ReleaseVMT();
 	engineVGuiVMT->ReleaseVMT();
 	soundVMT->ReleaseVMT();
@@ -141,5 +132,4 @@ void __attribute__((destructor)) AimTuxShutdown()
 	for (ptrdiff_t off = 0; off < 0x2; off++)
 		Util::ProtectAddr(CamThinkSvCheatsCheck + off, PROT_READ | PROT_EXEC);
 
-	cvar->ConsoleColorPrintf(ColorRGBA(255, 150, 150), "AimTux has been unloaded successfully.\n");
 }
