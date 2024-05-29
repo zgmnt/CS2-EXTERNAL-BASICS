@@ -1,0 +1,298 @@
+using System;
+using System.Numerics;
+using Swed64;
+using System.Media;
+
+SoundPlayer alarm = new SoundPlayer("alarm.wav");
+alarm.Load();
+
+SoundPlayer alarmP1 = new SoundPlayer("alarmP1.wav");
+alarmP1.Load();
+
+SoundPlayer alarmP2 = new SoundPlayer("alarmP2.wav");
+alarmP2.Load();
+
+SoundPlayer jeden = new SoundPlayer("jeden.wav");
+jeden.Load();
+
+SoundPlayer dwuch = new SoundPlayer("dwuch.wav");
+dwuch.Load();
+
+SoundPlayer lawka = new SoundPlayer("lawka.wav");
+lawka.Load();
+
+SoundPlayer _short = new SoundPlayer("short.wav");
+_short.Load();
+
+SoundPlayer ct = new SoundPlayer("ct.wav");
+ct.Load();
+
+SoundPlayer drewno = new SoundPlayer("drewno.wav");
+drewno.Load();
+
+SoundPlayer kuchnia = new SoundPlayer("kuchnia.wav");
+kuchnia.Load();
+
+SoundPlayer skrot_rampa = new SoundPlayer("skrot_rampa.wav");
+skrot_rampa.Load();
+
+SoundPlayer skrot_b = new SoundPlayer("skrot_b.wav");
+skrot_b.Load();
+
+SoundPlayer skrot_mid = new SoundPlayer("skrot_mid.wav");
+skrot_mid.Load();
+
+SoundPlayer skrot_palac = new SoundPlayer("skrot_palac.wav");
+skrot_palac.Load();
+
+Swed swed = new Swed("cs2");
+IntPtr client = swed.GetModuleBase("client.dll");
+
+int dwEntityList = 0x19A3328;
+int m_hPlayerPawn = 0x7DC; // from CCS PlayerController
+int m_iHealth = 0x324; // from CCS PlayerController
+
+int m_iszPlayerName = 0x630; // from C BasePlayerController
+int m_vecLastClipCameraPos = 0x12D4;
+int m_iTeamNum = 0x3C3;
+string teamSTR = "";
+string MYteamSTR = "";
+double diff = 0;
+
+int player_close = 0;
+
+float posX = 0;
+float posY = 0;
+float posZ = 0;
+
+float myPosX = 0;
+float myPosY = 0;
+
+int[] kitchenX = { -1493, -1572, -2364, -2360 };
+int[] kitchenY = { -334, -728, -700, -243 };
+
+int[] ticketX = {-1442 , -1355, - 1000, -768};
+int[] ticketY = {-2571, - 2140, - 2134, -2712};
+
+int[] rampaSkrotX = { 231,  235, 322, 297};
+int[] rampaSkrotY = {  -1670, -1332, -1333, -1810};
+
+int[] palacSkrotX = {139, 135, 190, 216 };
+int[] palacSkrotY = {-2454, -2149, -2149, -2527 };
+
+int[] midSkrotX = {69, 642, 646, 48 };
+int[] midSkrotY = {-169, -156, - 227, -261 };
+
+int[] bSkrotX = {-1438,-1436 , -1315, -1325};
+int[] bSkrotY = {584, 886, 922, 577};
+
+
+int min_distance_radar_alarm = 25;
+
+static bool IsPointInPolygon(float x, float y, int[] polyX, int[] polyY)
+{
+    int n = polyX.Length;
+    bool inside = false;
+
+    for (int i = 0, j = n - 1; i < n; j = i++)
+    {
+        if (((polyY[i] > y) != (polyY[j] > y)) &&
+            (x < (polyX[j] - polyX[i]) * (y - polyY[i]) / (polyY[j] - polyY[i]) + polyX[i]))
+        {
+            inside = !inside;
+        }
+    }
+
+    return inside;
+}
+
+static void playAlarm(double delay, SoundPlayer a)
+{
+    System.Threading.Thread.Sleep(Convert.ToInt32(delay));
+    a.Play();
+}
+
+static void playPosition(SoundPlayer p)
+{
+    p.PlaySync();
+}
+
+static string DetermineFigure(float x, float y, int[] figure1X, int[] figure1Y, int[] figure2X, int[] figure2Y, int[] figure3X, int[] figure3Y
+    , int[] figure4X, int[] figure4Y, int[] figure5X, int[] figure5Y, int[] figure6X, int[] figure6Y)
+{
+    bool isInFigure1 = IsPointInPolygon(x, y, figure1X, figure1Y);
+    bool isInFigure2 = IsPointInPolygon(x, y, figure2X, figure2Y);
+    bool isInFigure3 = IsPointInPolygon(x, y, figure3X, figure3Y);
+    bool isInFigure4 = IsPointInPolygon(x, y, figure4X, figure4Y);
+    bool isInFigure5 = IsPointInPolygon(x, y, figure5X, figure5Y);
+    bool isInFigure6 = IsPointInPolygon(x, y, figure6X, figure6Y);
+
+    switch ((isInFigure1, isInFigure2, isInFigure3, isInFigure4, isInFigure5, isInFigure6))
+    {
+        case (true, false, false, false, false, false):
+            return "ct";
+        case (false, true, false, false, false, false):
+            return "kitchen";
+        case (false, false, true, false, false, false):
+            return "skrot rampa";
+        case (false, false, false, true, false, false):
+            return "skrot palac";
+        case (false, false, false, false, true, false):
+            return "skrot b";
+        case (false, false, false, false, false, true):
+            return "skrot mid";
+        default:
+            return "inna";
+    }
+}
+
+while (true)
+{
+    IntPtr t_entityList = swed.ReadPointer(client, dwEntityList);
+    IntPtr entityList = swed.ReadPointer(t_entityList, 0x10);
+    //Console.WriteLine($"{player_close}");
+    player_close = 0;
+
+    for (int i = 0; i < 64; i++)
+    {
+        
+        if (entityList == IntPtr.Zero)
+            continue;
+
+        // zyskujemy poczatek pamieci iteracji graczy
+        IntPtr currentControler = swed.ReadPointer(entityList, i * 0x78);
+
+        if (currentControler == IntPtr.Zero)
+            continue;
+
+        int pawnHandle = swed.ReadInt(currentControler, m_hPlayerPawn);
+
+        if (pawnHandle == 0)
+            continue;
+
+        // second
+        IntPtr listEntry2 = swed.ReadPointer(t_entityList, 0x8 * ((pawnHandle & 0x7FFF) >> 9) + 0x10);
+        IntPtr currentPawn = swed.ReadPointer(listEntry2, 0x78 * (pawnHandle & 0x1FF));
+
+        // values
+        string name = swed.ReadString(currentControler, m_iszPlayerName, 16);
+        int i_name = swed.ReadInt(currentControler, m_iszPlayerName);
+        uint health = swed.ReadUInt(currentPawn, m_iHealth);
+        //Console.WriteLine($"{i_name} {name}");
+        // testy
+        posX = swed.ReadVec(currentPawn, m_vecLastClipCameraPos)[0];
+        posY = swed.ReadVec(currentPawn, m_vecLastClipCameraPos)[1];
+        posZ = swed.ReadVec(currentPawn, m_vecLastClipCameraPos)[2];
+        int team = swed.ReadInt(currentPawn, m_iTeamNum);
+
+        if (team == 2)
+        {
+            teamSTR = "TT";
+        }
+        else
+        {
+            teamSTR = "CT";
+        }
+
+        if (i_name == 1852663674)
+        {
+            if(health < 0)
+            {
+                continue;
+            }
+            myPosX = posX;
+            myPosY = posY;
+            MYteamSTR = teamSTR;
+        }
+
+        diff = Math.Sqrt((myPosX - posX) * (myPosX - posX) + (myPosY - posY) * (myPosY - posY)) / 50;
+        // pamietaj zeby to zmieniac int i_name = swed.ReadInt(currentControler, m_iszPlayerName);
+
+
+        if (team == 3)
+        {
+            if (health > 0)
+
+            {
+
+                if(diff < min_distance_radar_alarm)
+                {
+                    player_close = player_close + 1;
+                }
+
+                string pozycja = DetermineFigure(posX, posY, ticketX, ticketY, kitchenX, kitchenY, rampaSkrotX, rampaSkrotY, palacSkrotX, palacSkrotY,
+                    bSkrotX, bSkrotY, midSkrotX, midSkrotY);
+
+
+                if (pozycja == "kitchen")
+                {
+                    playPosition(kuchnia);
+                }
+                else if (pozycja == "ct")
+                {
+                    playPosition(ct);
+                }
+                else if (pozycja == "skrot rampa")
+                {
+
+                    playPosition(skrot_rampa);
+                }
+                else if (pozycja == "skrot palac")
+                {
+                    playPosition(skrot_palac);
+                }
+                else if (pozycja == "skrot b")
+                {
+                    playPosition(skrot_b);
+                }
+                else if (pozycja == "skrot mid")
+                {
+                    playPosition(skrot_mid);
+                }
+
+
+                // jedna z dwuch funkcjinalnosci bo sie gryza
+
+                /*
+                if (player_close == 1)
+                {
+                    if (diff < min_distance_radar_alarm && diff > 10)
+                    {
+                        playAlarm(50 * diff, alarmP1);
+                        Console.ForegroundColor = ConsoleColor.DarkRed;
+                    }
+                    else if (diff < 20 && diff >= 4)
+                    {
+
+                        playAlarm(50 * diff, alarmP2);
+                        Console.ForegroundColor = ConsoleColor.DarkRed;
+                    }
+                    else if (diff < 5)
+                    {
+                        playAlarm(150, alarmP2);
+                        Console.ForegroundColor = ConsoleColor.DarkRed;
+                    }
+                    else
+                    {
+                        Console.ForegroundColor = ConsoleColor.Green;
+                    }
+                }
+                 */
+
+
+
+
+                //Console.ForegroundColor = ConsoleColor.White;
+                //Console.WriteLine($"{teamSTR} {name}  {i_name}  {pozycja}");
+
+
+            }
+
+        }
+
+
+    }
+
+    System.Threading.Thread.Sleep(50);
+    Console.Clear();
+}
