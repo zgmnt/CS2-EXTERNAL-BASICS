@@ -1,4 +1,4 @@
-﻿using System.Numerics;
+using System.Numerics;
 using Swed64;
 
 Swed swed = new Swed("cs2");
@@ -50,6 +50,7 @@ while (true)
 
         // values
         string name = swed.ReadString(currentControler, m_iszPlayerName, 16);
+        int i_name = swed.ReadInt(currentControler, m_iszPlayerName);
         uint health = swed.ReadUInt(currentPawn, m_iHealth);
 
         // testy
@@ -67,7 +68,7 @@ while (true)
             teamSTR = "CT";
         }
 
-        if (i == 1) // this is not always right
+        if (i_name == 1852663674)
         {
             myPosX = posX;
             myPosY = posY;
@@ -90,7 +91,7 @@ while (true)
                     Console.ForegroundColor = ConsoleColor.Green;
                 }
 
-                Console.WriteLine($"{teamSTR}  {name}  {Math.Round(diff, 0)} m");
+                Console.WriteLine($"{teamSTR} {i_name}  {name}  {Math.Round(diff, 0)} m");
             }
 
         }
