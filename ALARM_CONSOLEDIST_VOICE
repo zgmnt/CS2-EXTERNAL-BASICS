@@ -1,0 +1,346 @@
+using System;
+using System.Numerics;
+using Swed64; // @SwedishTwat YouTube
+using System.Media;
+
+// AUTHOR @zgmnt
+
+//////////////////////////////////      AUDIO / SPEAKER EFFECTS    ////////////////////////////////////////////////////////
+
+SoundPlayer alarm = new SoundPlayer("alarm.wav");
+alarm.Load();
+
+SoundPlayer alarmP1 = new SoundPlayer("alarmP1.wav");
+alarmP1.Load();
+
+SoundPlayer alarmP2 = new SoundPlayer("alarmP2.wav");
+alarmP2.Load();
+
+SoundPlayer jeden = new SoundPlayer("jeden.wav");
+jeden.Load();
+
+SoundPlayer dwuch = new SoundPlayer("dwuch.wav");
+dwuch.Load();
+
+SoundPlayer lawka = new SoundPlayer("lawka.wav");
+lawka.Load();
+
+SoundPlayer _short = new SoundPlayer("short.wav");
+_short.Load();
+
+SoundPlayer ct = new SoundPlayer("ct.wav");
+ct.Load();
+
+SoundPlayer drewno = new SoundPlayer("drewno.wav");
+drewno.Load();
+
+SoundPlayer kuchnia = new SoundPlayer("kuchnia.wav");
+kuchnia.Load();
+
+SoundPlayer skrot_rampa = new SoundPlayer("skrot_rampa.wav");
+skrot_rampa.Load();
+
+SoundPlayer skrot_b = new SoundPlayer("skrot_b.wav");
+skrot_b.Load();
+
+SoundPlayer skrot_mid = new SoundPlayer("skrot_mid.wav");
+skrot_mid.Load();
+
+SoundPlayer skrot_palac = new SoundPlayer("skrot_palac.wav");
+skrot_palac.Load();
+
+//////////////////////////////////      PROCESS HANDLE   ////////////////////////////////////////////////////////
+
+Swed swed = new Swed("cs2");
+IntPtr client = swed.GetModuleBase("client.dll");
+
+//////////////////////////////////      VARIABLES USED IN MAIN LOOP   ////////////////////////////////////////////////////////
+
+// OFFSETS USED TO READ RIGHT DATA
+int dwEntityList = 0x19A3328;
+int m_hPlayerPawn = 0x7DC; // from CCS PlayerController
+int m_iHealth = 0x324; // from CCS PlayerController
+int m_iszPlayerName = 0x630; // from C BasePlayerController
+int m_vecLastClipCameraPos = 0x12D4;
+int m_iTeamNum = 0x3C3;
+
+// INICIALIZATION OF USED VARIABLES
+int team = 0;
+string teamSTR = "";
+int my_team = 0;
+
+// DISTANCE USED TO INVOKE ALARM
+double diff = 0;
+
+// ID THAT INFORM WHICH ENTITY IS MAIN PLAYER
+int myID = 1330074435;
+    //1852663674
+// VARIABLE THAT HOLDS CLASIFIED POSITION
+string pozycja = "";
+
+int min_distance_radar_alarm = 25;
+
+// ALL PLAYER CLOSE IN EXACT MOMENT, HELPING PROXIMITY ALERT FUNCTIONALITY
+int player_close = 0;
+
+// ENTITIES POSITIONS
+float posX = 0;
+float posY = 0;
+float posZ = 0;
+
+// MAIN PLAYER POSITION
+float myPosX = 0;
+float myPosY = 0;
+
+// FIGURES / LOCATIONS COORDINATES
+
+int[] kitchenX = { -1493, -1572, -2364, -2360 };
+int[] kitchenY = { -334, -728, -700, -243 };
+
+int[] ticketX = { -1442, -1355, -1000, -768 };
+int[] ticketY = { -2571, -2140, -2134, -2712 };
+
+int[] rampaSkrotX = { 231, 235, 322, 297 };
+int[] rampaSkrotY = { -1670, -1332, -1333, -1810 };
+
+int[] palacSkrotX = { 139, 135, 190, 216 };
+int[] palacSkrotY = { -2454, -2149, -2149, -2527 };
+
+int[] midSkrotX = { 69, 642, 646, 48 };
+int[] midSkrotY = { -169, -156, -227, -261 };
+
+int[] bSkrotX = { -1438, -1436, -1315, -1325 };
+int[] bSkrotY = { 584, 886, 922, 577 };
+
+
+
+//////////////////////////////////      FUNCTIONS    ////////////////////////////////////////////////////////
+
+
+
+// IS EXACT ENTITY IN GIVEN N FIGURE
+static bool IsPointInPolygon(float x, float y, int[] polyX, int[] polyY)
+{
+    int n = polyX.Length;
+    bool inside = false;
+
+    for (int i = 0, j = n - 1; i < n; j = i++)
+    {
+        if (((polyY[i] > y) != (polyY[j] > y)) &&
+            (x < (polyX[j] - polyX[i]) * (y - polyY[i]) / (polyY[j] - polyY[i]) + polyX[i]))
+        {
+            inside = !inside;
+        }
+    }
+
+    return inside;
+}
+
+// PROXIMITY ALERT WITH ADJUSTED DELAY
+static void playAlarm(double delay, SoundPlayer a)
+{
+    System.Threading.Thread.Sleep(Convert.ToInt32(delay));
+    a.Play();
+}
+
+// FIGURE OUT WHERE EXACT ENTITY IS LOCATED
+static string DetermineFigure(float x, float y,
+                              int[] figure1X, int[] figure1Y,
+                              int[] figure2X, int[] figure2Y,
+                              int[] figure3X, int[] figure3Y,
+                              int[] figure4X, int[] figure4Y,
+                              int[] figure5X, int[] figure5Y,
+                              int[] figure6X, int[] figure6Y)
+{
+    bool isInFigure1 = IsPointInPolygon(x, y, figure1X, figure1Y);
+    bool isInFigure2 = IsPointInPolygon(x, y, figure2X, figure2Y);
+    bool isInFigure3 = IsPointInPolygon(x, y, figure3X, figure3Y);
+    bool isInFigure4 = IsPointInPolygon(x, y, figure4X, figure4Y);
+    bool isInFigure5 = IsPointInPolygon(x, y, figure5X, figure5Y);
+    bool isInFigure6 = IsPointInPolygon(x, y, figure6X, figure6Y);
+
+    switch ((isInFigure1, isInFigure2, isInFigure3, isInFigure4, isInFigure5, isInFigure6))
+    {
+        case (true, false, false, false, false, false):
+            return "ct";
+        case (false, true, false, false, false, false):
+            return "kitchen";
+        case (false, false, true, false, false, false):
+            return "skrot rampa";
+        case (false, false, false, true, false, false):
+            return "skrot palac";
+        case (false, false, false, false, true, false):
+            return "skrot b";
+        case (false, false, false, false, false, true):
+            return "skrot mid";
+        default:
+            return "inna";
+    }
+}
+
+
+//////////////////////////////////      MAIN READ / RESPONSE LOOP    ////////////////////////////////////////////////////////
+
+
+while (true)
+{
+    IntPtr t_entityList = swed.ReadPointer(client, dwEntityList);
+    IntPtr entityList = swed.ReadPointer(t_entityList, 0x10);
+
+    player_close = 0; // ALL PLAYER CLOSE IN EXACT MOMENT, HELPING PROXIMITY ALERT FUNCTIONALITY
+
+    for (int i = 0; i < 64; i++)
+    {
+        if (entityList == IntPtr.Zero)
+            continue;
+
+        IntPtr currentControler = swed.ReadPointer(entityList, i * 0x78);
+
+        if (currentControler == IntPtr.Zero)
+            continue;
+
+        int pawnHandle = swed.ReadInt(currentControler, m_hPlayerPawn);
+
+        if (pawnHandle == 0)
+            continue;
+
+        IntPtr listEntry2 = swed.ReadPointer(t_entityList, 0x8 * ((pawnHandle & 0x7FFF) >> 9) + 0x10);
+        IntPtr currentPawn = swed.ReadPointer(listEntry2, 0x78 * (pawnHandle & 0x1FF));
+
+        // USED VALUES
+        int i_name = swed.ReadInt(currentControler, m_iszPlayerName); // FOR FIGURE OUT MY ENTITY
+        string name = swed.ReadString(currentControler, m_iszPlayerName, 16); // FOR DISTANCES FUNCTIONALITY
+        uint health = swed.ReadUInt(currentPawn, m_iHealth); // FILTER DEAD PLAYERS
+
+        // COORDINATES OF PLAYERS
+        posX = swed.ReadVec(currentPawn, m_vecLastClipCameraPos)[0];
+        posY = swed.ReadVec(currentPawn, m_vecLastClipCameraPos)[1];
+
+        // TEAM 2 - TT, 3 - CT
+        team = swed.ReadInt(currentPawn, m_iTeamNum);
+
+        if (team == 2)
+        {
+            teamSTR = "TT";
+        }
+        else
+        {
+            teamSTR = "CT";
+        }
+
+        // MAIN PLAYER POSITIONS, TEAM
+        if (i_name == myID)
+        {
+            if (health < 0)
+                continue;
+
+            myPosX = posX;
+            myPosY = posY;
+            my_team = team;
+        }
+
+        // EUCLIDEAN DIFFERENCE DISTANCE
+        diff = Math.Sqrt((myPosX - posX) * (myPosX - posX) + (myPosY - posY) * (myPosY - posY)) / 50;
+
+        // ONLY ANALYZE ENEMY TEAM
+        if (myID != i_name && my_team != team)
+        {
+            // ONLY PLAYERS WHO LIVE
+            if (health > 0)
+            {
+                // HANDLE FOR MORE PLAYER CLOSE = NO DOUBLE ALARM
+                if (diff < min_distance_radar_alarm)
+                {
+                    player_close = player_close + 1;
+                }
+
+                // FUNCTION INVOKE THAT RETURNS STRING POSITION
+                pozycja = DetermineFigure(posX, posY,
+                                          ticketX, ticketY,
+                                          kitchenX, kitchenY,
+                                          rampaSkrotX, rampaSkrotY,
+                                          palacSkrotX, palacSkrotY,
+                                          bSkrotX, bSkrotY,
+                                          midSkrotX, midSkrotY);
+
+
+                // MOTION DETECTION AND SPEAKER   //////////////////////////////////      FUNCTIONALITY 1
+                if (pozycja == "kitchen")
+                {
+                    kuchnia.PlaySync();
+                }
+                else if (pozycja == "ct")
+                {
+                    ct.PlaySync();
+                }
+                else if (pozycja == "skrot rampa")
+                {
+                    skrot_rampa.PlaySync(); ;
+                }
+                else if (pozycja == "skrot palac")
+                {
+                    skrot_palac.PlaySync();
+                }
+                else if (pozycja == "skrot b")
+                {
+                    skrot_b.PlaySync();
+                }
+                else if (pozycja == "skrot mid")
+                {
+                    skrot_mid.PlaySync();
+                }
+
+
+                // PROXIMITY ALERT //////////////////////////////////      FUNCTIONALITY 2
+
+                /*
+                if (player_close == 1)
+                {
+                    if (diff < min_distance_radar_alarm && diff > 10)
+                    {
+                        playAlarm(50 * diff, alarmP1);
+                    }
+                    else if (diff < 20 && diff >= 4)
+                    {
+                        playAlarm(50 * diff, alarmP2);
+                    }
+                    else if (diff < 5)
+                    {
+                        playAlarm(150, alarmP2);
+                    }
+                    else
+                    {
+                    }
+                }
+                 */
+
+
+
+
+                // CONSOLE DISTANCE //////////////////////////////////      FUNCTIONALITY 3
+
+                /*
+                
+                if (diff < 20)
+                {
+                    Console.ForegroundColor = ConsoleColor.DarkRed;
+                }
+                else
+                {
+                    Console.ForegroundColor = ConsoleColor.Green;
+                }
+
+                Console.WriteLine($"{teamSTR} {name}  {Math.Round(diff, 0)} m");
+                 
+                */
+
+
+
+
+            }
+        }
+    }
+
+    System.Threading.Thread.Sleep(50);
+    Console.Clear();
+}
