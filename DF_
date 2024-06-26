@@ -1,0 +1,341 @@
+using System;
+using System.Numerics;
+using Swed64;
+
+// AUTHOR @zgmnt
+
+
+//////////////////////////////////      PROCESS HANDLE   ////////////////////////////////////////////////////////
+
+Swed swed = new Swed("cs2");
+IntPtr client = swed.GetModuleBase("client.dll");
+
+//////////////////////////////////      VARIABLES USED IN MAIN LOOP   ////////////////////////////////////////////////////////
+
+// OFFSETS USED TO READ RIGHT DATA
+int dwEntityList = 0x19BCC38;
+int dwGameRules = 0x1A1A6A8;
+
+int m_hPlayerPawn = 0x7DC; // from CCS PlayerController
+int m_iHealth = 0x324; // from CCS PlayerController
+int m_iszPlayerName = 0x630; // from C BasePlayerController
+int m_vecLastClipCameraPos = 0x12D4;
+int m_iTeamNum = 0x3C3;
+int m_totalRoundsPlayed = 0x84;
+int m_bBombPlanted = 0x9A5;
+int m_flLastSmokeOverlayAlpha = 0x1400;
+int m_bIsWalking = 0x2230;
+int m_unWeaponHash = 0x14C4;
+int m_flFlashDuration = 0x135C;
+int m_bIsDefusing = 0x22A2;
+int m_bFreezePeriod = 0x40;
+int m_eRoundEndReason = 0xE7C;
+int m_nPrevArmorVal = 0x14B8;
+int m_bPrevDefuser = 0x14B6;
+int m_bPrevHelmet = 0x14B7;
+int m_nPrevGrenadeAmmoCount = 0x14BC;
+int m_bLeftHanded = 0x2179;
+int m_bIsScoped = 0x22A0;
+int m_flEmitSoundTime = 0x22A8;
+int m_unRoundStartEquipmentValue = 0x22D8;
+int m_flHitHeading = 0x22BC;
+
+
+// INICIALIZATION OF USED VARIABLES
+int team = 0;
+string teamSTR = "";
+int round_nr = 0;
+int prev_round_nr = 0;
+int bomb = 0;
+string bomb_str = "";
+int roundFrame = 0;
+bool walking = false;
+int weapon = 0;
+bool inSmoke = false;
+float smokeAlpha = 0;
+float flash_time = 0;
+bool isFlashed = false;
+bool isScoping = false;
+bool isDefusing = false;
+bool isGameLive = false;
+bool hasDefuseKit = false;
+bool leftHanded = false;
+bool isMakingSound = false;
+bool isHitted = false;
+int MakingSoundINT = 0;
+int MakingSoundINT_PREV = 0;
+float hit = 0;
+float hitprev = 0;
+bool hasHelmet = false;
+int endRoundReason = 0;
+int grenadesInEQ = 0;
+int armor = 0;
+uint eqBoughtValue = 0;
+string endRoundReasonSTR = "";
+uint weaponID = 0;
+
+// tests
+
+int itest = 0;
+float ftest = 0;
+bool btest = false;
+char stest = 's';
+uint utest = 0;
+
+
+// VARIABLE THAT HOLDS CLASIFIED POSITION
+string pozycja = "";
+
+
+// ENTITIES POSITIONS
+float posX = 0;
+float posY = 0;
+float posZ = 0;
+
+// MAIN PLAYER POSITION
+float myPosX = 0;
+float myPosY = 0;
+
+// FIGURES / LOCATIONS COORDINATES
+
+int[] kitchenX = { -1493, -1572, -2364, -2360 };
+int[] kitchenY = { -334, -728, -700, -243 };
+
+int[] ticketX = { -1442, -1355, -1000, -768 };
+int[] ticketY = { -2571, -2140, -2134, -2712 };
+
+int[] rampaSkrotX = { 231, 235, 322, 297 };
+int[] rampaSkrotY = { -1670, -1332, -1333, -1810 };
+
+int[] palacSkrotX = { 139, 135, 190, 216 };
+int[] palacSkrotY = { -2454, -2149, -2149, -2527 };
+
+int[] midSkrotX = { 69, 642, 646, 48 };
+int[] midSkrotY = { -169, -156, -227, -261 };
+
+int[] bSkrotX = { -1438, -1436, -1315, -1325 };
+int[] bSkrotY = { 584, 886, 922, 577 };
+
+
+
+//////////////////////////////////      FUNCTIONS    ////////////////////////////////////////////////////////
+
+
+
+// IS EXACT ENTITY IN GIVEN N FIGURE
+static bool IsPointInPolygon(float x, float y, int[] polyX, int[] polyY)
+{
+    int n = polyX.Length;
+    bool inside = false;
+
+    for (int i = 0, j = n - 1; i < n; j = i++)
+    {
+        if (((polyY[i] > y) != (polyY[j] > y)) &&
+            (x < (polyX[j] - polyX[i]) * (y - polyY[i]) / (polyY[j] - polyY[i]) + polyX[i]))
+        {
+            inside = !inside;
+        }
+    }
+
+    return inside;
+}
+
+
+// FIGURE OUT WHERE EXACT ENTITY IS LOCATED
+static string DetermineFigure(float x, float y,
+                                int[] figure1X, int[] figure1Y,
+                                int[] figure2X, int[] figure2Y,
+                                int[] figure3X, int[] figure3Y,
+                                int[] figure4X, int[] figure4Y,
+                                int[] figure5X, int[] figure5Y,
+                                int[] figure6X, int[] figure6Y)
+{
+    bool isInFigure1 = IsPointInPolygon(x, y, figure1X, figure1Y);
+    bool isInFigure2 = IsPointInPolygon(x, y, figure2X, figure2Y);
+    bool isInFigure3 = IsPointInPolygon(x, y, figure3X, figure3Y);
+    bool isInFigure4 = IsPointInPolygon(x, y, figure4X, figure4Y);
+    bool isInFigure5 = IsPointInPolygon(x, y, figure5X, figure5Y);
+    bool isInFigure6 = IsPointInPolygon(x, y, figure6X, figure6Y);
+
+    switch ((isInFigure1, isInFigure2, isInFigure3, isInFigure4, isInFigure5, isInFigure6))
+    {
+        case (true, false, false, false, false, false):
+            return "ct";
+        case (false, true, false, false, false, false):
+            return "kitchen";
+        case (false, false, true, false, false, false):
+            return "skrot rampa";
+        case (false, false, false, true, false, false):
+            return "skrot palac";
+        case (false, false, false, false, true, false):
+            return "skrot b";
+        case (false, false, false, false, false, true):
+            return "skrot mid";
+        default:
+            return "inna";
+    }
+}
+
+
+//////////////////////////////////      MAIN READ / RESPONSE LOOP    ////////////////////////////////////////////////////////
+
+
+
+while (true)
+{
+
+    IntPtr t_entityList = swed.ReadPointer(client, dwEntityList);
+    IntPtr entityList = swed.ReadPointer(t_entityList, 0x10);
+    IntPtr gameRule = swed.ReadPointer(client, dwGameRules);
+
+    round_nr = swed.ReadInt(gameRule, m_totalRoundsPlayed);
+
+
+    if (prev_round_nr < round_nr)
+    {
+        roundFrame = 0;
+        prev_round_nr = round_nr;
+    }
+    else
+    {
+        roundFrame += 1;
+    }
+
+
+    bomb = swed.ReadInt(gameRule, m_bBombPlanted);
+    isGameLive = swed.ReadBool(gameRule, m_bFreezePeriod);
+    endRoundReason = swed.ReadInt(gameRule, m_eRoundEndReason);
+
+    if (endRoundReason == 7)
+    { endRoundReasonSTR = "byDefused"; }
+    else if (endRoundReason == 8) { endRoundReasonSTR = "CT eliminated TT"; }
+    else if (endRoundReason == 9) { endRoundReasonSTR = "TT eliminated CT"; }
+    else if (endRoundReason == 1) { endRoundReasonSTR = "Bomb exploded"; }
+    else { endRoundReasonSTR = "other"; }
+
+
+
+    for (int i = 0; i < 64; i++)
+    {
+        if (entityList == IntPtr.Zero)
+            continue;
+
+        IntPtr currentControler = swed.ReadPointer(entityList, i * 0x78);
+
+        if (currentControler == IntPtr.Zero)
+            continue;
+
+        int pawnHandle = swed.ReadInt(currentControler, m_hPlayerPawn);
+
+        if (pawnHandle == 0)
+            continue;
+
+        IntPtr listEntry2 = swed.ReadPointer(t_entityList, 0x8 * ((pawnHandle & 0x7FFF) >> 9) + 0x10);
+        IntPtr currentPawn = swed.ReadPointer(listEntry2, 0x78 * (pawnHandle & 0x1FF));
+
+
+        // USED VALUES
+        int i_name = swed.ReadInt(currentControler, m_iszPlayerName); // FOR FIGURE OUT MY ENTITY
+        string name = swed.ReadString(currentControler, m_iszPlayerName, 16); // FOR DISTANCES FUNCTIONALITY
+
+        uint health = swed.ReadUInt(currentPawn, m_iHealth); // FILTER DEAD PLAYERS
+        eqBoughtValue = swed.ReadUInt(currentPawn, m_unRoundStartEquipmentValue);
+        armor = swed.ReadInt(currentPawn, m_nPrevArmorVal);
+        hasDefuseKit = swed.ReadBool(currentPawn, m_bPrevDefuser);
+        grenadesInEQ = swed.ReadInt(currentPawn, m_nPrevGrenadeAmmoCount);
+        weaponID = swed.ReadUInt(currentPawn, m_unWeaponHash);
+
+        hasHelmet = swed.ReadBool(currentPawn, m_bPrevHelmet);
+        isScoping = swed.ReadBool(currentPawn, m_bIsScoped);
+        leftHanded = swed.ReadBool(currentPawn, m_bLeftHanded);
+        walking = swed.ReadBool(currentPawn, m_bIsWalking);
+        weapon = swed.ReadInt(currentPawn, m_unWeaponHash);
+        flash_time = (float)Math.Round(swed.ReadFloat(currentPawn, m_flFlashDuration), 1);
+
+
+
+        MakingSoundINT = swed.ReadInt(currentPawn, m_flEmitSoundTime);
+
+        if (MakingSoundINT_PREV > MakingSoundINT)
+        {
+            isMakingSound = true;
+
+        }
+        else
+        {
+            isMakingSound = false;
+            MakingSoundINT_PREV = MakingSoundINT;
+        }
+
+
+        // COORDINATES OF PLAYERS
+        posX = (int)Math.Round(swed.ReadVec(currentPawn, m_vecLastClipCameraPos)[0]);
+        posY = (int)Math.Round(swed.ReadVec(currentPawn, m_vecLastClipCameraPos)[1]);
+
+        // TEAM 2 - TT, 3 - CT
+        team = swed.ReadInt(currentPawn, m_iTeamNum);
+        isDefusing = swed.ReadBool(currentPawn, m_bIsDefusing);
+
+
+
+        hit = swed.ReadFloat(currentPawn, m_flHitHeading);
+
+        if (hit != 0)
+        {
+            if(hit != hitprev)
+            {
+                isHitted = true;
+                hitprev = hit;
+            }
+            else
+            {
+                isHitted = false;
+            }
+        }
+        else
+        {
+            isHitted = false;
+        }
+
+        
+
+
+        if (team == 2)
+        { teamSTR = "TT"; }
+        else { teamSTR = "CT"; }
+
+
+        if (bomb == 0)
+        { bomb_str = "not planted"; }
+        else
+        { bomb_str = "planted"; }
+
+
+        if (flash_time != 0) { isFlashed = true; }
+        else { isFlashed = false; }
+
+        smokeAlpha = swed.ReadFloat(currentPawn, m_flLastSmokeOverlayAlpha);
+
+        if (smokeAlpha != 0) { inSmoke = true; }
+        else { inSmoke = false; }
+
+        // FUNCTION INVOKE THAT RETURNS STRING POSITION
+        pozycja = DetermineFigure(posX, posY,
+                        ticketX, ticketY,
+                        kitchenX, kitchenY,
+                        rampaSkrotX, rampaSkrotY,
+                        palacSkrotX, palacSkrotY,
+                        bSkrotX, bSkrotY,
+                        midSkrotX, midSkrotY);
+
+
+
+         //  File.AppendAllText("demo2.csv", (round_nr + 1) + ";" + roundFrame + ";" + bomb_str + ";" + name + ";" + health + ";" + posX + ";"
+         //  + posY + ";" + teamSTR + ";" + isDefusing + ";" + walking + ";" + weapon + ";" + isFlashed + ";" + inSmoke + ";" + endRoundReasonSTR +
+         //  ";" + armor +";"+ hasDefuseKit + ";" + hasHelmet + ";" + grenadesInEQ + ";" + leftHanded +  ";" + isScoping + ";" + eqBoughtValue + "\n");
+
+    }
+
+    System.Threading.Thread.Sleep(500);
+    Console.Clear();
+}
